@@ -3,15 +3,13 @@ vacuum:
     vacuums:
       white_vacuum:
         friendly_name: "White Vacuum"
-        unique_id: white_vacuum
+        unique_id: white_vacuum_vacuum
         value_template: >
-          {% if states('sensor.whitevacuum_states') == "Charging with Cable " %} docked
-          {% elif states('sensor.whitevacuum_states') == "idle" %} idle
-          {% elif states('sensor.whitevacuum_states') == "Charging" %} docked
-          {% elif states('sensor.whitevacuum_states') == "DONNO" %} DONNO
-          {% elif states('sensor.whitevacuum_states') == "cleaning" %} cleaning
-          {% elif states('sensor.whitevacuum_states') == "paused" %} paused
-          {% elif states('sensor.whitevacuum_states') == "returning" %} returning
+          {% if states('sensor.whitevacuum_states')  == "cleaning" %} cleaning
+          {% elif states('sensor.whitevacuum_states')  == "returning" %} returning
+          {% elif states('sensor.whitevacuum_states')  == "idle" %} idle
+          {% elif states('sensor.whitevacuum_states')  == "docked" %} docked
+          {% else %} {{ states('vacuum.white_vacuum') }}
           {% endif %}
         battery_level_template: "{{ states('sensor.whitevacuum_battery') }}"
         fan_speed_template: "{{ states('sensor.vacuum_fan_speed') }}"
@@ -44,14 +42,14 @@ script:
       - service: mqtt.publish
         data_template:
           topic: cmnd/WhiteVacuum/SerialSend5
-          payload: aa 03 02 26 00 28 aa 03 02 24 01 27
+          payload: aa 03 02 26 00 28
 # SmartCleaning
   whitevacuum_smartcleaning:
     sequence:
       - service: mqtt.publish
         data_template:
           topic: cmnd/WhiteVacuum/SerialSend5
-          payload: aa 03 02 22 02 26 aa 03 02 24 01 27
+          payload: aa 03 02 22 02 26
 # Go Charge
   whitevacuum_go_charge:
     sequence:
@@ -65,7 +63,7 @@ script:
       - service: mqtt.publish
         data_template:
           topic: cmnd/WhiteVacuum/SerialSend5
-          payload: aa 03 02 22 01 25 aa 03 02 24 01 27
+          payload: aa 03 02 22 01 25
 # Fan Speed Quiet (Min)
   whitevacuum_fan_speed_quiet:
     sequence:
@@ -80,11 +78,39 @@ script:
         data_template:
           topic: cmnd/WhiteVacuum/SerialSend5
           payload: aa 03 02 22 01 25 aa 03 02 24 01 27
+# Move Front
+  whitevacuum_move_front:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/WhiteVacuum/SerialSend5
+          payload: aa 03 02 21 00 23 aa 03 02 21 04 27
+# Move Back
+  whitevacuum_move_back:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/WhiteVacuum/SerialSend5
+          payload: aa 03 02 21 03 26 aa 03 02 21 04 27
+# Move Left
+  whitevacuum_move_left:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/WhiteVacuum/SerialSend5
+          payload: aa 03 02 21 02 25 aa 03 02 21 04 27
+# Move Right 
+  whitevacuum_move_right:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/WhiteVacuum/SerialSend5
+          payload: aa 03 02 21 01 24 aa 03 02 21 04 27
 
 sensor:
   - platform: mqtt
     name: "WhiteVacuum Battery"
-    unique_id: white_vacuum
+    unique_id: white_vacuum_battery
     state_topic: tele/WhiteVacuum/RESULT
     unit_of_measurement: "%"
     value_template: >
@@ -96,15 +122,21 @@ sensor:
 
   - platform: mqtt
     name: "WhiteVacuum States"
+    unique_id: white_vacuum_states
     state_topic: tele/WhiteVacuum/RESULT
     value_template: >
-      {% if value_json['SerialReceived'][-2:] == "72" %} Charging with Cable 
-      {% elif value_json['SerialReceived'][-2:] == "71" %} idle
-      {% elif value_json['SerialReceived'][-2:] == "73" %} Charging
-      {% elif value_json['SerialReceived'][-2:] == "75" %} DONNO
-      {% elif value_json['SerialReceived'][-2:] == "6B" %} cleaning
-      {% elif value_json['SerialReceived'][-2:] == "6D" %} paused
-      {% elif value_json['SerialReceived'][-2:] == "70" %} returning
-      {% else %} {{ value_json['SerialReceived'][-2:] }}
+      {% if value_json['SerialReceived'][:14] == "AA1C06FF000002" %} cleaning
+      {% elif value_json['SerialReceived'][:14] == "AA1C06FF000004" %} idle
+      {% elif value_json['SerialReceived'][:14] == "AA1C06FF00000A" %} cleaning
+      {% elif value_json['SerialReceived'][:14] == "AA1C06FF00010A" %} cleaning
+      {% elif value_json['SerialReceived'][:14] == "AA1C06FF00020A" %} cleaning
+      {% elif value_json['SerialReceived'][:14] == "AA1C06FF00030A" %} cleaning
+      {% elif value_json['SerialReceived'][:14] == "AA1C06FF000401" %} cleaning
+      {% elif value_json['SerialReceived'][:14] == "AA1C06FF000402" %} cleaning
+      {% elif value_json['SerialReceived'][:14] == "AA1C06FF000403" %} returning
+      {% elif value_json['SerialReceived'][:14] == "AA1C06FF000404" %} idle
+      {% elif value_json['SerialReceived'][:14] == "AA1C06FF000406" %} docked
+      {% elif value_json['SerialReceived'][:14] == "AA1C06FF000408" %} docked
+      {% elif value_json['SerialReceived'][:14] == "AA1C06FF000405" %} Hibernating
+      {% else %} {{ states('sensor.whitevacuum_states') }}
       {% endif %}
-
