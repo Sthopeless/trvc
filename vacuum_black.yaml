@@ -1,0 +1,315 @@
+vacuum:
+  - platform: template
+    vacuums:
+      black_vacuum:
+        friendly_name: Black Vacuum
+        unique_id: black_vacuum
+        value_template: >
+          {% if states("sensor.blackvacuum_dpid28_state") == "StandBy" %} idle
+          {% elif states("sensor.blackvacuum_dpid28_state") == "Working" %} cleaning
+          {% elif states("sensor.blackvacuum_dpid28_state") == "Fault" %} error
+          {% elif states("sensor.blackvacuum_dpid28_state") == "Sleep" %} idle
+          {% elif states("sensor.blackvacuum_dpid28_state") == "Work Completed" %} idle
+          {% elif states("sensor.blackvacuum_dpid28_state") == "Charging" %} docked
+          {% elif states("sensor.blackvacuum_dpid28_state") == "Charge Completed" %} docked
+          {% elif states("sensor.blackvacuum_dpid28_state") == "Pause" %} paused
+          {% elif states("sensor.blackvacuum_dpid28_state") == "Cleanning" %} cleaning
+          {% elif states("sensor.blackvacuum_dpid28_state") == "Mopping" %} cleaning
+          {% elif states("sensor.blackvacuum_dpid28_state") == "Docking" %} returning
+          {% endif %}
+        battery_level_template: "{{ states('sensor.blackvacuum_dpid14_battery')|int }}"
+        fan_speed_template: "{{ states('sensor.blackvacuum_dpid30_suction_speed') }}"
+        start:
+          service: input_select.select_option
+          data:
+            entity_id: input_select.blackvacuum_dpid27_mode
+            option: "Smart"
+        pause:
+          service: switch.turn_off
+          entity_id: switch.blackvacuum_dpid25_power_go
+        stop:
+            service: script.blackvacuum_dpid26_direction_stop
+        return_to_base:
+          service: input_select.select_option
+          data:
+            entity_id: input_select.blackvacuum_dpid27_mode
+            option: "Go Charge"
+        clean_spot:
+          service: input_select.select_option
+          data:
+            entity_id: input_select.blackvacuum_dpid27_mode
+            option: "Smart"
+        locate:
+            service: script.blackvacuum_dpid29_locate
+        set_fan_speed:
+          service: input_select.select_option
+          data_template:
+            entity_id: input_select.blackvacuum_dpid30_suction
+            option: "{{ fan_speed }}"
+        fan_speeds:
+            - "Min"
+            - "Medium"
+            - "Max"
+        attribute_templates:
+          status: "{{ states('sensor.blackvacuum_dpid28_state') }}"
+
+sensor:
+  - platform: mqtt
+    name: "BlackVacuum DpId28 state"
+    state_topic: tele/BlackVacuum/RESULT
+    value_template: >
+      {% if value_json.TuyaReceived['28'].DpIdData == "00" %} StandBy
+      {% elif value_json.TuyaReceived['28'].DpIdData == "01" %} Working
+      {% elif value_json.TuyaReceived['28'].DpIdData == "02" %} Fault
+      {% elif value_json.TuyaReceived['28'].DpIdData == "03" %} Sleep
+      {% elif value_json.TuyaReceived['28'].DpIdData == "04" %} Work Completed
+      {% elif value_json.TuyaReceived['28'].DpIdData == "05" %} Charging
+      {% elif value_json.TuyaReceived['28'].DpIdData == "06" %} Charge Completed
+      {% elif value_json.TuyaReceived['28'].DpIdData == "07" %} Pause
+      {% elif value_json.TuyaReceived['28'].DpIdData == "08" %} Cleanning
+      {% elif value_json.TuyaReceived['28'].DpIdData == "09" %} Mopping
+      {% elif value_json.TuyaReceived['28'].DpIdData == "0A" %} Docking
+      {% endif %}
+
+  - platform: mqtt
+    name: "BlackVacuum DpId30 suction_speed"
+    state_topic: tele/BlackVacuum/RESULT
+    value_template: >
+      {% if value_json.TuyaReceived['30'].DpIdData == "00" %} Min
+      {% elif value_json.TuyaReceived['30'].DpIdData == "01" %} Medium
+      {% elif value_json.TuyaReceived['30'].DpIdData == "02" %} Max
+      {% endif %}
+
+  - platform: mqtt
+    name: "BlackVacuum DpId14 battery"
+    state_topic: tele/BlackVacuum/RESULT
+    device_class: battery
+    value_template:  >
+      {% if value_json.TuyaReceived is defined and value_json['TuyaReceived'].DpType2Id14 is defined %}
+        {{ value_json['TuyaReceived'].DpType2Id14 }}
+      {% else %}
+        {{ states('sensor.blackvacuum_dpid14_battery') }}
+      {% endif %}
+
+  - platform: mqtt
+    name: "BlackVacuum DpId32 clean_area"
+    state_topic: tele/BlackVacuum/RESULT
+    value_template:  >
+      {% if value_json.TuyaReceived is defined and value_json['TuyaReceived'].DpType2Id32 is defined %}
+        {{ value_json['TuyaReceived'].DpType2Id32 }}
+      {% else %}
+        {{ states('sensor.blackvacuum_dpid32_clean_area') }}
+      {% endif %}
+
+  - platform: mqtt
+    name: "BlackVacuum DpId33 clean_time"
+    state_topic: tele/BlackVacuum/RESULT
+    value_template:  >
+      {% if value_json.TuyaReceived is defined and value_json['TuyaReceived'].DpType2Id33 is defined %}
+        {{ value_json['TuyaReceived'].DpType2Id33 }}
+      {% else %}
+        {{ states('sensor.blackvacuum_dpid33_clean_time') }}
+      {% endif %}
+
+  - platform: mqtt
+    name: "BlackVacuum DpId11 fault"
+    state_topic: tele/BlackVacuum/RESULT
+    value_template: "{{ value_json.TuyaReceived['11'].DpIdData }}"
+
+switch:
+  - platform: mqtt
+    unique_id: blackvacuum_dpid1_switch
+    name: "BlackVacuum DpId1 switch" # Sleep / WakeUp
+    icon: mdi:robot-vacuum
+    state_topic: "stat/BlackVacuum/POWER"
+    command_topic: "cmnd/BlackVacuum/TuyaSend1"
+    value_template: >
+      {% if value_json['TuyaReceived'].DpType1Id1 == 0 %}
+        OFF
+      {% elif value_json['TuyaReceived'].DpType1Id1 == 1 %}
+        ON
+      {% endif %}
+    payload_on: "1,1"
+    payload_off: "1,0"
+    state_on: "ON"
+    state_off: "OFF"
+    qos: 1
+    retain: false
+
+  - platform: mqtt
+    unique_id: blackvacuum_dpid25_power_go
+    name: "BlackVacuum DpId25 power_go"
+    icon: mdi:robot-vacuum
+    state_topic: "tele/BlackVacuum/RESULT"
+    command_topic: "cmnd/BlackVacuum/TuyaSend1"
+    value_template: >
+      {% if value_json['TuyaReceived'].DpType1Id25 == 0 %}
+        OFF
+      {% elif value_json['TuyaReceived'].DpType1Id25 == 1 %}
+        ON
+      {% endif %}
+    payload_on: "25,1"
+    payload_off: "25,0"
+    state_on: "ON"   # Start
+    state_off: "OFF" # Pause
+    qos: 1
+    retain: false
+
+  - platform: mqtt
+    unique_id: blackvacuum_dpid31_voice_switch
+    name: "BlackVacuum DpId31 voice_switch"
+    icon: mdi:volume-source
+    state_topic: "tele/BlackVacuum/RESULT"
+    command_topic: "cmnd/BlackVacuum/TuyaSend1"
+    value_template: >
+      {% if value_json['TuyaReceived'].DpType1Id31 == 0 %}
+        OFF
+      {% elif value_json['TuyaReceived'].DpType1Id31 == 1 %}
+        ON
+      {% endif %}
+    payload_on: "31,1"
+    payload_off: "31,0"
+    state_on: "ON"
+    state_off: "OFF"
+    qos: 1
+    retain: false
+
+input_select:
+  blackvacuum_dpid27_mode:
+    name: BlackVacuum DpId27 Modes
+    initial: "Standby"
+    options:
+      - "Standby"
+      - "Smart"
+      - "Spiral"
+      - "Single"
+      - "Wall Follow"
+      - "Go Charge"
+      
+  blackvacuum_dpid30_suction:
+    name: BlackVacuum DpId30 suction
+    initial: "Medium"
+    options:
+      - "Min"
+      - "Medium"
+      - "Max"
+
+script:
+#Working Mode
+  blackvacuum_dpid27:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend4
+          payload_template: >
+            {% if is_state("input_select.blackvacuum_dpid27_mode", "Standby") %} 27,0
+            {% elif is_state("input_select.blackvacuum_dpid27_mode", "Smart") %} 27,1
+            {% elif is_state("input_select.blackvacuum_dpid27_mode", "Spiral") %} 27,2
+            {% elif is_state("input_select.blackvacuum_dpid27_mode", "Single") %} 27,3
+            {% elif is_state("input_select.blackvacuum_dpid27_mode", "Wall Follow") %} 27,4
+            {% elif is_state("input_select.blackvacuum_dpid27_mode", "Go Charge") %} 27,5
+            {%- endif -%}
+#Suction Power
+  blackvacuum_dpid30:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend4
+          payload_template: >
+            {% if is_state("input_select.blackvacuum_dpid30_suction", "Min") %} 30,0
+            {% elif is_state("input_select.blackvacuum_dpid30_suction", "Medium") %} 30,1
+            {% elif is_state("input_select.blackvacuum_dpid30_suction", "Max") %} 30,2
+            {%- endif -%}
+#Front
+  blackvacuum_dpid26_direction_front:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend4
+          payload: 26,0
+#Back
+  blackvacuum_dpid26_direction_back:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend4
+          payload: 26,1
+#Turn Left
+  blackvacuum_dpid26_direction_left:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend4
+          payload: 26,2
+#Turn Right
+  blackvacuum_dpid26_direction_right:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend4
+          payload: 26,3
+#Stop
+  blackvacuum_dpid26_direction_stop:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend4
+          payload: 26,4
+#Pause
+  blackvacuum_dpid26_direction_stop:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend1
+          payload: 25,1
+#Resume
+  blackvacuum_dpid26_direction_stop:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend1
+          payload: 25,0
+
+#Locate
+  blackvacuum_dpid29_locate:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend1
+          payload: 29,1
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend1
+          payload: 29,0
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend1
+          payload: 29,1
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend1
+          payload: 29,0
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend1
+          payload: 29,1
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend1
+          payload: 29,0
+
+automation:
+  - alias: 'BlackVacuum DpId27 Working Mode'
+    trigger:
+      - platform: state
+        entity_id: input_select.blackvacuum_dpid27_mode
+    action:
+      service: script.blackvacuum_dpid27
+  - alias: 'BlackVacuum DpId30 Suction'
+    trigger:
+      - platform: state
+        entity_id: input_select.blackvacuum_dpid30_suction
+    action:
+      service: script.blackvacuum_dpid30
+
+
