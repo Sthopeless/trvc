@@ -12,7 +12,7 @@ vacuum:
           {% else %} {{ states('vacuum.white_vacuum') }}
           {% endif %}
         battery_level_template: "{{ states('sensor.whitevacuum_battery') }}"
-        fan_speed_template: "{{ states('sensor.vacuum_fan_speed') }}"
+
         start:
           service: script.whitevacuum_smartcleaning
         pause:
@@ -23,15 +23,17 @@ vacuum:
           service: script.whitevacuum_go_charge
         clean_spot:
           service: script.whitevacuum_spot_clean
-        locate:
-          service: script.vacuum_locate_vacuum
         set_fan_speed:
-          service: script.vacuum_set_fan_speed
-          data_template:
-            speed: "{{ fan_speed }}"
+          service_template: >
+            {% if state_attr('vacuum.white_vacuum', 'fan_speed') == "Min" %}
+              script.whitevacuum_fan_speed_min
+            {% elif state_attr('vacuum.white_vacuum', 'fan_speed') == "Max" %}
+              script.whitevacuum_fan_speed_max
+            {% endif %} 
         fan_speeds:
-            - "Min"
-            - "Max"
+            - Min
+            - Max
+        fan_speed_template: "{{ states('input_select.whitevacuum_fan_speed') }}"
         attribute_templates:
           status: "{{ states('sensor.whitevacuum_states') }}"
             
@@ -65,19 +67,19 @@ script:
           topic: cmnd/WhiteVacuum/SerialSend5
           payload: aa 03 02 22 01 25
 # Fan Speed Quiet (Min)
-  whitevacuum_fan_speed_quiet:
+  whitevacuum_fan_speed_min:
     sequence:
       - service: mqtt.publish
         data_template:
           topic: cmnd/WhiteVacuum/SerialSend5
-          payload: aa 03 02 22 01 25
+          payload: aa 03 02 24 00 26
 # Fan Speed Quiet (Max)
-  whitevacuum_fan_speed_strong:
+  whitevacuum_fan_speed_max:
     sequence:
       - service: mqtt.publish
         data_template:
           topic: cmnd/WhiteVacuum/SerialSend5
-          payload: aa 03 02 22 01 25 aa 03 02 24 01 27
+          payload: aa 03 02 24 01 27
 # Move Front
   whitevacuum_move_front:
     sequence:
@@ -106,6 +108,13 @@ script:
         data_template:
           topic: cmnd/WhiteVacuum/SerialSend5
           payload: aa 03 02 21 01 24 aa 03 02 21 04 27
+# WiFi Connected (in case long pressing the Power // button doens't make any difference)
+  whitevacuum_wifi_connected:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/WhiteVacuum/SerialSend5
+          payload: aa 04 05 00 01 01 07        
 
 sensor:
   - platform: mqtt
@@ -140,3 +149,58 @@ sensor:
       {% elif value_json['SerialReceived'][:14] == "AA1C06FF000405" %} Hibernating
       {% else %} {{ states('sensor.whitevacuum_states') }}
       {% endif %}
+
+input_select:
+  whitevacuum_fan_speed:
+    name: "whitevacuum_fan_speed"
+    initial: Min
+    options:
+      - Min
+      - Max
+
+automation:
+# Change the vacuum fan speed automaticly when Input_Select is changed 
+  - alias: 'whitevacuum_auto1'
+    trigger:
+      - platform: state
+        entity_id: input_select.whitevacuum_fan_speed
+    action:
+      service_template: script.whitevacuum_fan_speed_{{ trigger.to_state.state }}
+
+# If Fan speed is Max when Vacuum stops go back to Min (Vacuum will always start in Min speed this syncs states)
+  - alias: 'whitevacuum_auto2'
+    trigger:
+      - platform: state
+        entity_id: vacuum.white_vacuum
+        from: cleaning
+    condition:
+      condition: and
+      conditions:
+        - condition: state
+          entity_id: input_select.whitevacuum_fan_speed
+          state: Max      
+    action:
+      - service: input_select.select_option
+        data:
+          entity_id: input_select.whitevacuum_fan_speed
+          option: Min
+
+# This will only change the Fan speed to Max if the Vacuum is working (Vacuum doesn't change speed to Max Unless is working)
+  - alias: 'whitevacuum_auto3'
+    trigger:
+      - platform: state
+        entity_id: input_select.whitevacuum_fan_speed
+        to: Max
+    condition:
+      condition: and
+      conditions:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: vacuum.white_vacuum
+              state: cleaning         
+    action:
+      - service: input_select.select_option
+        data:
+          entity_id: input_select.whitevacuum_fan_speed
+          option: Min
