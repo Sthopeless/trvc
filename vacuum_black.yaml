@@ -256,19 +256,19 @@ script:
           topic: cmnd/BlackVacuum/TuyaSend4
           payload: 26,4
 #Pause
-  blackvacuum_dpid26_direction_stop:
-    sequence:
-      - service: mqtt.publish
-        data_template:
-          topic: cmnd/BlackVacuum/TuyaSend1
-          payload: 25,1
-#Resume
-  blackvacuum_dpid26_direction_stop:
+  blackvacuum_dpid26_direction_pause:
     sequence:
       - service: mqtt.publish
         data_template:
           topic: cmnd/BlackVacuum/TuyaSend1
           payload: 25,0
+#Resume
+  blackvacuum_dpid26_direction_resume:
+    sequence:
+      - service: mqtt.publish
+        data_template:
+          topic: cmnd/BlackVacuum/TuyaSend1
+          payload: 25,1
 
 #Locate
   blackvacuum_dpid29_locate:
